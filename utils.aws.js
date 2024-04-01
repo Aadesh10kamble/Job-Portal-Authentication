@@ -1,6 +1,8 @@
 const AWS = require("aws-sdk");
 const config = require("./config.js");
-const { PutObjectCommand, S3Client } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const qrcode = require("qrcode");
+
 const REGION = config.AWS_REGION;
 const AWS_COGNITO_CLIENT_ID = config.AWS_COGNITO_CLIENT_ID;
 const S3_BUCKET = config.AWS_BUCKET_NAME;
@@ -84,7 +86,6 @@ exports.confirmPasswordChange = async (password, code, email) => {
 };
 
 exports.uploadS3Object = async (type, file, userId) => {
-    console.log ("Enter!!");
     const params = {
         Bucket: S3_BUCKET,
         Key: `${type}/${userId}/${file.originalname}`,
@@ -98,24 +99,36 @@ exports.getS3Object = async key => {
         Bucket: S3_BUCKET,
         Key: key
     };
-    console.log("11-11")
-    console.log(await s3.getObject(params).promise());
+    return s3.getSignedUrl('getObject', params);
 };
 
-// exports.changeAttributes = async (token, email) => {
-//     const params = {
-//         AccessToken: token,
-//         UserAttributes: {
-//             "Name": "email",
-//             "Value": email
-//         }
-//     };
-//     await cognito.updateUserAttributes(params).promise();
-// };
+exports.connectWithAuthenticator = async ({ session, userId }) => {
+    const response = await cognito.associateSoftwareToken({ Session: session, }).promise();
+    const QRCode = await qrcode.toDataURL(`otpauth://totp/basteon?secret=${response["SecretCode"]}`);
+    return { ...response, userId, QRCode };
+};
 
-// exports.verifyAttributeChange = async (token,code) => {
-//     const params = {
-//         AccessToken : token,
-//         Att
-//     }
-// }
+exports.respondChallenges = async ({ challenge, session, userId, code }) => {
+    return await cognito.respondToAuthChallenge({
+        ClientId: AWS_COGNITO_CLIENT_ID,
+        ChallengeName: challenge,
+        Session: session,
+        ChallengeResponses: {
+            "USERNAME": userId,
+            ...(!!code && { "SOFTWARE_TOKEN_MFA_CODE": code })
+        }
+    }).promise();
+};
+
+exports.verifyAuthenticator = async ({ code, session, userId }) => {
+    const response = await cognito.verifySoftwareToken({ UserCode: code, Session: session }).promise();
+    return await this.respondChallenges({ challenge: "MFA_SETUP", session: response["Session"], userId })
+};
+
+exports.changeMFASettings = async ({ token, enabled }) => {
+    return await cognito.setUserMFAPreference({
+        AccessToken:
+            token,
+        SoftwareTokenMfaSettings: { Enabled: enabled, PreferredMfa: enabled }
+    }).promise();
+};

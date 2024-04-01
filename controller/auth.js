@@ -1,8 +1,17 @@
 const { query, selectUser, createUser } = require('../initdb.js');
 const { DatabaseError } = require('pg');
-const { userSignUp, verifyUserEmail, userSignIn, uploadS3Object, getS3Object, getAWSUser } = require('../utils.aws.js');
 const { getTokens } = require("../utils.oauth.js");
 const { escapeSingleQuotes } = require('../utilsMiddleware.js');
+const {
+    userSignUp,
+    verifyUserEmail,
+    userSignIn,
+    uploadS3Object,
+    getS3Object,
+    getAWSUser,
+    respondChallenges,
+    connectWithAuthenticator,
+    verifyAuthenticator } = require('../utils.aws.js');
 
 exports.signUp = async (req, res) => {
     try {
@@ -15,16 +24,11 @@ exports.signUp = async (req, res) => {
         if (req.file) {
             const { key } = await uploadS3Object("profile-picture", req.file, user.UserSub);
             if (key) imageKey = key;
-        }
+        };
 
-        // const dbResponse = await createUser ({})
-        const dbResponse = await query(`
-        INSERT INTO user_job (id,email,phone,image_key,role)
-            VALUES 
-        ('${user.UserSub}','${email}',
-        ${phone ? `${phone}` : null},
-        ${imageKey ? `'${imageKey}'` : null},
-        '${role}') RETURNING *`);
+        const dbResponse = await query(
+            `INSERT INTO user_job (id,email,phone,image_key,role) VALUES (?,?,?,?,?) RETURNING *`,
+            [user.UserSub, email, phone || null, imageKey || null, role]);
 
         if (!dbResponse.rowCount) return res.failure("USER_CREATION_FAILED");
         return res.success(dbResponse.rows[0]);
@@ -33,7 +37,7 @@ exports.signUp = async (req, res) => {
         if (error instanceof DatabaseError) {
             return res.status(400).json({ message: error.message });
         };
-        res.failure (error.message);
+        res.failure(error.message);
     };
 };
 
@@ -49,7 +53,7 @@ exports.signIn = async (req, res) => {
         if (error instanceof DatabaseError) {
             return res.status(400).json({ message: error.message });
         };
-        res.failure (error.message);
+        res.failure(error.message);
     };
 };
 
@@ -63,7 +67,7 @@ exports.verifyUser = async (req, res) => {
         if (error instanceof DatabaseError) {
             return res.status(400).json({ message: error.message });
         };
-        res.failure (error.message);
+        res.failure(error.message);
     };
 };
 
@@ -79,7 +83,7 @@ exports.getUser = async (req, res) => {
         if (error instanceof DatabaseError) {
             return res.status(400).json({ message: error.message });
         };
-        res.failure (error.message);
+        res.failure(error.message);
     };
 };
 
@@ -100,12 +104,66 @@ exports.googleAuthentication = async (req, res) => {
             const userResponse = await createUser({ userId: id, email, });
             if (!userResponse.rowCount) return res.failure("USER_CREATION_FAILED");
         };
-        res.success (tokens.data);
+        res.success(tokens.data);
     } catch (error) {
         console.log(error);
         if (error instanceof DatabaseError) {
             return res.status(400).json({ message: error.message });
         };
-        res.failure (error.message);
+        res.failure(error.message);
     };
 };
+
+exports.associateWithAuthenticator = async (req, res) => {
+    try {
+        const { data } = req.body;
+        const params = {
+            challenge: data["ChallengeName"],
+            session: data["Session"],
+            userId: data["ChallengeParameters"]["USER_ID_FOR_SRP"]
+        };
+        const response = await connectWithAuthenticator(params);
+        res.success(response);
+    } catch (error) {
+        console.log(error);
+        if (error instanceof DatabaseError) {
+            return res.status(400).json({ message: error.message });
+        };
+        res.failure(error.message);
+    }
+}
+
+exports.realMFA = async (req, res) => {
+    try {
+        const { data, code,userId } = req.body;
+        const params = {
+            challenge: data["ChallengeName"],
+            session: data["Session"],
+            userId:userId,
+            code
+        };
+
+        const response = await respondChallenges(params);
+        res.success(response);
+    } catch (error) {
+        console.log(error);
+        if (error instanceof DatabaseError) {
+            return res.status(400).json({ message: error.message });
+        };
+        res.failure(error.message);
+    }
+}
+
+exports.verifyTokenSoftware = async (req, res) => {
+    try {
+        const { code, session, userId } = req.body;
+        const response = await verifyAuthenticator({ code, session, userId });
+        res.success(response);
+    } catch (error) {
+        console.log(error);
+        if (error instanceof DatabaseError) {
+            return res.status(400).json({ message: error.message });
+        };
+        res.failure(error.message);
+    }
+}

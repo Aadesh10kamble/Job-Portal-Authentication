@@ -6,7 +6,8 @@ CREATE TABLE user_job (
     phone VARCHAR(50) CHECK(regexp_replace(phone,'[\/\s\(\)+-]','','g') ~ '^\d*$'),
     user_uid VARCHAR(100) UNIQUE,
     image_key TEXT,
-    email VARCHAR(50)
+    email VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );`);
 
 exports.down = knex => knex.raw (`

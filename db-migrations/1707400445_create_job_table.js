@@ -7,7 +7,8 @@ CREATE TABLE job (
     title VARCHAR(255) NOT NULL,
     opening INTEGER DEFAULT 1,
     description TEXT,
-    location TEXT
+    location TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );`);
 
 exports.down = knex => knex.raw (`

@@ -5,7 +5,7 @@ const { selectUser } = require('./initdb.js');
 exports.escapeSingleQuotes = body => {
     const processedBody = {};
     for (let key of Object.keys(body)) {
-        if (typeof body[key] === "string" && key !== "password") processedBody[key] = body[key].replaceAll("'", "''").trim();
+        if (typeof body[key] === "string" && key !== "password") processedBody[key] = body[key].replaceAll("?", "\\?").trim();
         else processedBody[key] = body[key];
     };
     return processedBody;

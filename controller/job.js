@@ -13,12 +13,8 @@ exports.postJob = async (req, res) => {
         if (!title) return res.failure("TITLE_REQUIRED");
 
         let fields = 'company_id,title,required_skills,opening,description,location';
-        let values = `'${companyId}','${title}',
-        ${requiredSkills ? '`${requiredSkills}`' : null},
-        ${opening || 1},${description ? '`${description}`' : null},
-        ${location ? '`${location}`' : null}`;
-
-        const dbResponse = await query(`INSERT INTO job (${fields}) VALUES (${values}) RETURNING *`);
+        const dbResponse = await query(`INSERT INTO job (${fields}) VALUES (?,?,?,?,?,?) RETURNING *`,
+            [companyId, title, requiredSkills || null, opening || 1, description || null, location || null]);
         if (!dbResponse.rowCount) return res.failure("JOB_CREATION_FAILED");
 
         res.success(dbResponse.rows[0]);
@@ -34,9 +30,8 @@ exports.getJobs = async (req, res) => {
 
         const offSet = (pageNumber * 10) - 10;
         const dbResponse = await query(`SELECT * FROM job 
-        WHERE company_id='${companyId}' AND title LIKE '%${searchText}%'
-        LIMIT 10 OFFSET ${offSet}
-        `);
+        WHERE company_id=? AND title LIKE '%?%'
+        LIMIT 10 OFFSET ?`, [companyId, searchText, offSet]);
 
         const jobs = dbResponse.rows;
 

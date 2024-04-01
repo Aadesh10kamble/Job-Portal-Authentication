@@ -3,7 +3,8 @@ CREATE TABLE application (
     id UUID NOT NULL DEFAULT gen_random_uuid () UNIQUE,
     applied_by UUID REFERENCES user_job (id) ON DELETE CASCADE,
     resume_url TEXT,
-    job_id UUID REFERENCES job (id) ON DELETE CASCADE
+    job_id UUID REFERENCES job (id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );`);
 
 exports.down = knex => knex.raw (`
